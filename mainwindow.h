@@ -14,15 +14,18 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 public slots:
     void SLO_getaimage(QImage img);
+    void SLO_settotaltime(qint64 total);
+    void SLO_setcurtime(int clock);
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
+    Ui::MainWindow *ui;
 private slots:
     void on_pushButton_clicked();
 
+    void on_pushButton_2_clicked();
+
 private:
-    Ui::MainWindow *ui;
     Player m_player;
 };
 #endif // MAINWINDOW_H

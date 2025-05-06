@@ -13,9 +13,8 @@ public:
     void push(T data);
     void pop();
     T front();
+    void clear();
 };
-#include "m_queue.h"
-
 
 template<class T>
 m_queue<T>::m_queue()
@@ -41,6 +40,15 @@ void m_queue<T>::pop()
 {
     QMutexLocker locker(&lock);
     return que.pop();
+}
+
+template<class T>
+void m_queue<T>::clear()
+{
+    queue<T>temp;
+    QMutexLocker locker(&lock);
+    swap(temp,que);
+    return;
 }
 
 #endif // M_QUEUE_H
