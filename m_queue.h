@@ -11,9 +11,13 @@ public:
     queue<T>que;
     QMutex lock;
     void push(T data);
+    void push_flush(T data);
     void pop();
     T front();
+    int size();
+    bool empty();
     void clear();
+
 };
 
 template<class T>
@@ -25,6 +29,15 @@ template<class T>
 void m_queue<T>::push(T data)
 {
     QMutexLocker locker(&lock);
+    return que.push(data);
+}
+
+template<class T>
+void m_queue<T>::push_flush(T data)
+{
+    queue<T>temp;
+    QMutexLocker locker(&lock);
+    swap(temp,que);
     return que.push(data);
 }
 
@@ -50,5 +63,20 @@ void m_queue<T>::clear()
     swap(temp,que);
     return;
 }
+
+template<class T>
+int m_queue<T>::size()
+{
+    QMutexLocker locker(&lock);
+    return que.size();
+}
+
+template<class T>
+bool m_queue<T>::empty()
+{
+    QMutexLocker locker(&lock);
+    return que.empty();
+}
+
 
 #endif // M_QUEUE_H

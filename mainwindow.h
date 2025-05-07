@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 #include"player.h"
+#include<QStyle>
+#include<QMouseEvent>
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -19,6 +21,7 @@ public slots:
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    bool eventFilter(QObject* obj, QEvent* event);
     Ui::MainWindow *ui;
 private slots:
     void on_pushButton_clicked();

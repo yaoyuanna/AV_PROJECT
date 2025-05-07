@@ -78,6 +78,7 @@ public:
     QImage              defaultimage;
     bool                is_seek;
     int                 seek;
+    void    seek_to();
 };
 //视频线程
 int video_thread(void *arg);

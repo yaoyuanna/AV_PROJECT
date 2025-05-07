@@ -58,6 +58,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&m_player,&Player::SIG_getainmage,this,&MainWindow::SLO_getaimage);
     connect(&m_player,&Player::SIG_settotaltime,this,&MainWindow::SLO_settotaltime);
     connect(&m_player,&Player::SIG_setcurtime,this,&MainWindow::SLO_setcurtime);
+    ui->horizontalSlider->installEventFilter(this);
     //m_player.setFileName("C:\\Users\\86139\\Videos\\Captures\\魔法少女与恶曾是敌人。 第01集-4K动漫 和另外 1 个页面 - 个人 - Microsoft​ Edge 2024-08-20 16-07-36.mp4");
     //m_player.setFileName("C:\\Users\\86139\\Videos\\4k测试短片\\4k测试短片.mp4");
     m_player.setFileName("C:\\Users\\86139\\Desktop\\1000008923.mp4");
@@ -66,6 +67,32 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == ui->horizontalSlider)
+    {
+        if (event->type() == QEvent::MouseButtonPress) {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+            int min = ui->horizontalSlider->minimum();
+            int max = ui->horizontalSlider->maximum();
+            int value = QStyle::sliderValueFromPosition(min, max, mouseEvent->pos().x(), ui->horizontalSlider->width());
+            SDL_RemoveTimer(m_player.seek_timer_id);
+            ui->horizontalSlider->setValue(value);
+            m_player.seek=value; //value 秒
+            m_player.is_seek=true;
+            qDebug()<<"seek:"<<value;
+            m_player.seek_timer_id = SDL_AddTimer(1000,&timer_callback1,&m_player);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    // pass the event on to the parent class
+    return MainWindow::eventFilter(obj, event);
 }
 
 void MainWindow::on_pushButton_clicked()

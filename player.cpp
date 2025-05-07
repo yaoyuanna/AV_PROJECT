@@ -186,7 +186,10 @@ void Player::run()
     qDebug()<<"producer start work";
     while (ais_running||vis_running) {
         if(!is_running)video_cond.wakeOne();
-        qDebug()<<ais_running<<vis_running;
+        //qDebug()<<ais_running<<vis_running;
+        if(is_seek){
+            seek_to();
+        }
         if(av_read_frame(format_ctx, packet) >= 0){
             if (packet->stream_index == video_stream_index) {
                 qDebug()<<"producer add a video packet";
@@ -199,8 +202,8 @@ void Player::run()
             }
             av_packet_unref(packet);
             /*根据队列中的任务数量来延迟，超过100个包了就延迟*/
-            while((audio_que->que.size()>100||video_que->que.size()>100)&&is_running){
-                qDebug()<<audio_que->que.size()<<video_que->que.size();
+            while((audio_que->size()>100||video_que->size()>100)&&is_running&&!is_seek){
+                qDebug()<<audio_que->size()<<video_que->size();
                 SDL_Delay(1000);
             }
         }else SDL_Delay(100);
@@ -227,6 +230,25 @@ void Player::setFileName(const QString &newFileName)
 {
     m_fileName = newFileName;
 }
+
+void Player::seek_to()
+{
+    int stream_index = video_stream_index!=-1?video_stream_index:audio_stream_index;
+    int64_t seek_target = av_rescale_q(seek*1000000, {1, AV_TIME_BASE},format_ctx->streams[stream_index]->time_base);
+    if (av_seek_frame(format_ctx, stream_index, seek_target,AVSEEK_FLAG_BACKWARD) < 0)
+        fprintf(stderr, "%s: error while seeking",format_ctx->filename);
+
+    AVPacket* temppkt=(AVPacket *) malloc(sizeof(AVPacket));
+    av_new_packet(temppkt, 10);
+    strcpy((char*)temppkt->data,FLUSH_DATA);
+
+    if(audio_stream_index!=-1)audio_que->push_flush(*av_packet_clone(temppkt));
+    if(video_stream_index!=-1)video_que->push_flush(*av_packet_clone(temppkt));
+
+    qDebug()<<"video que:"<<video_que->size()<<"   audio que:"<<audio_que->size();
+
+    is_seek=false;
+}
 Uint32 SDLCALL timer_callback(Uint32 interval, void *userdata){
     Player* player=(Player*)userdata;
     if(player->state==0||!player->vis_running){
@@ -234,7 +256,7 @@ Uint32 SDLCALL timer_callback(Uint32 interval, void *userdata){
         qDebug()<<"timmer stop";
         return 0;
     }
-    qDebug()<<"timer:"<<"wake vplayer"<<interval<<SDL_GetTicks()-player->time_last;
+    //qDebug()<<"timer:"<<"wake vplayer"<<interval<<SDL_GetTicks()-player->time_last;
     player->time_last=SDL_GetTicks();
     player->lock.lock();
     player->video_work=true;
@@ -299,15 +321,15 @@ int video_thread(void *arg){
     while(1){
         player->lock.lock();
         ///若任务队列不为空且定时器已经将video_work设置为true则工作
-        while(player->video_que->que.empty()||!player->video_work){
+        while(player->video_que->empty()||!player->video_work){
             //qDebug()<<"consumer is sleep";
-            if(player->video_que->que.empty()||player->is_running==false){
+            if(player->video_que->empty()||player->is_running==false){
                 if(player->is_running==false){
                     player->vis_running=false;
                 }
                 else{
                     SDL_Delay(1000);
-                    if(player->video_que->que.empty())player->vis_running=false;
+                    if(player->video_que->empty())player->vis_running=false;
                 }
                 if(player->vis_running==false){
                     emit player->SIG_getainmage(player->defaultimage);
@@ -321,13 +343,20 @@ int video_thread(void *arg){
         //qDebug()<<"consumer is wake";
         AVPacket packet=player->video_que->front();
         player->video_que->pop();
+        while(strcmp((char*)packet.data,FLUSH_DATA) == 0)
+        {
+            avcodec_flush_buffers(player->audio_codec_ctx);
+            av_free_packet(&packet); //很关键 , 不清空 向左跳转, 视频帧会等待音频帧
+            packet=player->video_que->front();
+            player->video_que->pop();
+        }
         player->video_clock=packet.pts*av_q2d(player->video_stream->time_base);
-        qDebug()<<"video clock:"<<player->video_clock;
+        //qDebug()<<"video clock:"<<player->video_clock;
         while(player->video_clock>player->audio_clock){
-            qDebug()<<"-----------------------------------------------------------";
+            //qDebug()<<"-----------------------------------------------------------";
             SDL_Delay(10);
         }
-        //qDebug()<<"video que:"<<player->video_que->que.size();
+        //qDebug()<<"video que:"<<player->video_que->size();
         player->lock.unlock();
         ///已将视频包取出开始进行解码与显示
         ret = avcodec_send_packet(player->video_codec_ctx, &packet);
@@ -431,18 +460,25 @@ int audio_decode_frame(Player *player, uint8_t *audio_buf, int buf_size)
     static struct SwrContext *swr_ctx = NULL;
     int convert_len;
     int n = 0;
-    for(;;)
+    while(1)
     {
         if(player->is_running==false) return -1;
-        if(player->audio_que->que.empty()) //一定注意
+        if(player->audio_que->empty()&&!player->is_seek) //一定注意
         {
             SDL_Delay(100);
-            if(player->audio_que->que.empty())
+            if(player->audio_que->empty())
             return -1;
         }
         if(player->state==0)return -2;
         pkt=player->audio_que->front();
         player->audio_que->pop();
+        while(strcmp((char*)pkt.data,FLUSH_DATA) == 0)
+        {
+            avcodec_flush_buffers(player->audio_codec_ctx);
+            av_free_packet(&pkt);
+            pkt=player->audio_que->front();
+            player->audio_que->pop();
+        }
         audioFrame = av_frame_alloc();
         audio_pkt_data = pkt.data;
         audio_pkt_size = pkt.size;
@@ -456,13 +492,14 @@ int audio_decode_frame(Player *player, uint8_t *audio_buf, int buf_size)
         {
             player->audio_clock = (*(uint64_t *) audioFrame->opaque)*av_q2d( player->audio_stream->time_base );
         }
-        qDebug()<<"audio clock:"<<player->audio_clock;
+        //qDebug()<<"audio clock:"<<player->audio_clock;
         while(audio_pkt_size > 0)
         {
             int got_picture;
             memset(audioFrame, 0, sizeof(AVFrame));
             int ret =avcodec_decode_audio4( aCodecCtx, audioFrame, &got_picture, &pkt);
             if( ret < 0 ) {
+                qDebug()<<(char*)pkt.data;
                 qDebug()<<"Error in decoding audio frame. ";
                 exit(0);
             }

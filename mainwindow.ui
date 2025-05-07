@@ -14,7 +14,7 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout_2" stretch="15,1,1">
+   <layout class="QVBoxLayout" name="verticalLayout_2" stretch="100,1,5">
     <item>
      <widget class="QLabel" name="lb_show">
       <property name="sizePolicy">
