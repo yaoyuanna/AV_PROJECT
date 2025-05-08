@@ -188,7 +188,9 @@ void Player::run()
         if(!is_running)video_cond.wakeOne();
         //qDebug()<<ais_running<<vis_running;
         if(is_seek){
+            lock.lock();
             seek_to();
+            lock.unlock();
         }
         if(av_read_frame(format_ctx, packet) >= 0){
             if (packet->stream_index == video_stream_index) {
@@ -233,7 +235,7 @@ void Player::setFileName(const QString &newFileName)
 
 void Player::seek_to()
 {
-    int stream_index = video_stream_index!=-1?video_stream_index:audio_stream_index;
+    int stream_index = video_stream_index !=-1?video_stream_index:audio_stream_index;
     int64_t seek_target = av_rescale_q(seek*1000000, {1, AV_TIME_BASE},format_ctx->streams[stream_index]->time_base);
     if (av_seek_frame(format_ctx, stream_index, seek_target,AVSEEK_FLAG_BACKWARD) < 0)
         fprintf(stderr, "%s: error while seeking",format_ctx->filename);
@@ -342,15 +344,20 @@ int video_thread(void *arg){
         }
         //qDebug()<<"consumer is wake";
         AVPacket packet=player->video_que->front();
+        qDebug()<<"vedio pop1++++++++++++++++size:"<<player->video_que->size();
         player->video_que->pop();
         while(strcmp((char*)packet.data,FLUSH_DATA) == 0)
         {
             avcodec_flush_buffers(player->audio_codec_ctx);
-            av_free_packet(&packet); //很关键 , 不清空 向左跳转, 视频帧会等待音频帧
+            av_free_packet(&packet);
+            while(player->video_que->empty()){}            //很关键 , 不清空 向左跳转, 视频帧会等待音频帧
             packet=player->video_que->front();
+            qDebug()<<"vedio pop2++++++++++++++++size:"<<player->video_que->size();
             player->video_que->pop();
+            qDebug()<<"vedio flush";
         }
         player->video_clock=packet.pts*av_q2d(player->video_stream->time_base);
+        qDebug()<<"vedio get a paket pts:"<<player->video_clock;
         //qDebug()<<"video clock:"<<player->video_clock;
         while(player->video_clock>player->audio_clock){
             //qDebug()<<"-----------------------------------------------------------";
@@ -471,13 +478,17 @@ int audio_decode_frame(Player *player, uint8_t *audio_buf, int buf_size)
         }
         if(player->state==0)return -2;
         pkt=player->audio_que->front();
+        qDebug()<<"audio pop1=========================size:"<<player->audio_que->size();
         player->audio_que->pop();
         while(strcmp((char*)pkt.data,FLUSH_DATA) == 0)
         {
             avcodec_flush_buffers(player->audio_codec_ctx);
             av_free_packet(&pkt);
+            while(player->audio_que->empty()){}
             pkt=player->audio_que->front();
+            qDebug()<<"audio pop1=========================size:"<<player->audio_que->size();
             player->audio_que->pop();
+            qDebug()<<"audio flush";
         }
         audioFrame = av_frame_alloc();
         audio_pkt_data = pkt.data;
@@ -501,7 +512,7 @@ int audio_decode_frame(Player *player, uint8_t *audio_buf, int buf_size)
             if( ret < 0 ) {
                 qDebug()<<(char*)pkt.data;
                 qDebug()<<"Error in decoding audio frame. ";
-                exit(0);
+                return -2;
             }
             data_size = audioFrame->nb_samples * player->wanted_frame.channels * 2;
             if( got_picture )

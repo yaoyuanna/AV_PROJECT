@@ -2,6 +2,7 @@
 #define M_QUEUE_H
 #include<queue>
 #include<QMutex>
+#include<QDebug>
 using namespace std;
 template <class T>
 class m_queue
@@ -45,6 +46,7 @@ template<class T>
 T m_queue<T>::front()
 {
     QMutexLocker locker(&lock);
+    if(que.empty())qDebug()<<"---------------------------------------------";
     return que.front();
 }
 

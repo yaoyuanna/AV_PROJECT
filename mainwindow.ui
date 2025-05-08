@@ -16,17 +16,7 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2" stretch="100,1,5">
     <item>
-     <widget class="QLabel" name="lb_show">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
+     <widget class="MyOpenGLWidget" name="widget_show" native="true"/>
     </item>
     <item>
      <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="1,15,1">
@@ -122,6 +112,14 @@
    </layout>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>MyOpenGLWidget</class>
+   <extends>QWidget</extends>
+   <header location="global">myopenglwidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources>
   <include location="picture.qrc"/>
  </resources>
